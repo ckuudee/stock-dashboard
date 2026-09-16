@@ -1,121 +1,68 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from 'react'
+
+// Twelve Data returns every numeric field as a STRING ("326.59000"), so the type
+// describes the wire format honestly and we convert at the point of use.
+type Quote = {
+  symbol: string
+  name: string
+  close: string
+  change: string
+  percent_change: string
+}
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [quote, setQuote] = useState<Quote | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Lets us cancel the in-flight request if this effect is torn down before it
+    // finishes — React StrictMode runs effects twice in dev, and later the user
+    // will change symbols mid-request.
+    const controller = new AbortController()
+
+    async function load() {
+      try {
+        // Relative path on purpose: Vite proxies /api to :3001 in dev, and in
+        // production the proxy is same-origin. No hardcoded hostname either way.
+        const res = await fetch('/api/quote?symbol=AAPL', {
+          signal: controller.signal,
+        })
+        const data = await res.json()
+
+        // Our proxy signals failure with a real HTTP status, so check it.
+        if (!res.ok) {
+          setError(data.error ?? 'Request failed')
+          return
+        }
+        setQuote(data)
+      } catch (err) {
+        // An aborted request isn't a failure — it's us cancelling on purpose.
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setError('Could not reach the server')
+      }
+    }
+
+    load()
+    return () => controller.abort()
+  }, [])
+
+  if (error) return <p role="alert">Error: {error}</p>
+  if (!quote) return <p>Loading…</p>
+
+  const price = Number(quote.close)
+  const change = Number(quote.change)
+  const percentChange = Number(quote.percent_change)
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <main>
+      <h1>{quote.symbol}</h1>
+      <p>{quote.name}</p>
+      <p>${price.toFixed(2)}</p>
+      <p>
+        {change >= 0 ? '+' : ''}
+        {change.toFixed(2)} ({percentChange.toFixed(2)}%)
+      </p>
+    </main>
   )
 }
 
